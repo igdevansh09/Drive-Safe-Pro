@@ -1,10 +1,9 @@
-// /src/app/drive.tsx
-
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,63 +11,75 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle, Path } from "react-native-svg";
+
 import { useAppTheme } from "../hooks/useAppTheme";
 import { TelemetryEvent } from "../services/EventDetector";
-import { TelemetryEngine as SensorManager } from "../services/SensorManager";
+import { SensorManager } from "../services/SensorManager";
 import { finalizeDriveSession } from "../services/SessionManager";
 import { useDriveStore } from "../store/useDriveStore";
-import { formatDuration, getSafetyRating } from "../utils/formatters";
+import { getSafetyRating } from "../utils/formatters";
 
 export default function DriveScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // 1. Global State
-  const {
-    isDriving,
-    score,
-    events,
-    startTime,
-    startDriveSession,
-    registerEvent,
-  } = useDriveStore();
+  const { score, events, startDriveSession, registerEvent } = useDriveStore();
 
-  // 2. Local State (Low-frequency updates only)
-  const [elapsedMs, setElapsedMs] = useState(0);
-
-  // 3. Hardware Engine Reference (Bypasses React Lifecycle)
   const engineRef = useRef<SensorManager | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 4. Initialize Hardware on Mount
+  const [speed, setSpeed] = useState(45);
+  const [peakGForce, setPeakGForce] = useState(0);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scoreAnim = useRef(new Animated.Value(100)).current;
+
   useEffect(() => {
-    // The callback injected into the physics engine
     const handleEventDetected = (event: TelemetryEvent) => {
+      // Update peak g-force
+      setPeakGForce((prev) => Math.max(prev, event.gForce));
+
+      // Animate score decrease
+      Animated.timing(scoreAnim, {
+        toValue: score,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+
       registerEvent(event);
     };
 
     engineRef.current = new SensorManager(handleEventDetected);
-
-    // Auto-start the drive as soon as the modal opens
     startDriveSession();
     engineRef.current.startDrive();
 
-    // Start the UI timer (updates once per second, perfectly safe for UI thread)
-    timerRef.current = setInterval(() => {
-      if (useDriveStore.getState().startTime) {
-        setElapsedMs(Date.now() - useDriveStore.getState().startTime!);
-      }
-    }, 1000);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
 
-    // CRITICAL: Cleanup function prevents battery drain if modal is force-closed
+    const speedInterval = setInterval(() => {
+      setSpeed((prev) =>
+        Math.max(0, prev + (Math.floor(Math.random() * 5) - 2)),
+      );
+    }, 2000);
+
     return () => {
       if (engineRef.current) engineRef.current.endDrive();
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearInterval(speedInterval);
     };
-  }, []);
+  }, [score, registerEvent, startDriveSession]);
 
-  // 5. Finalize Logic
   const handleEndDrive = () => {
     Alert.alert("End Drive", "Are you sure you want to finish this trip?", [
       { text: "Cancel", style: "cancel" },
@@ -76,263 +87,581 @@ export default function DriveScreen() {
         text: "End Trip",
         style: "destructive",
         onPress: () => {
-          // Shut down the hardware
           if (engineRef.current) engineRef.current.endDrive();
-          if (timerRef.current) clearInterval(timerRef.current);
-
-          // Compile data, save to history, and wipe active store
           finalizeDriveSession();
-
-          // Return to dashboard
-          router.back();
+          router.replace("/summary");
         },
       },
     ]);
   };
 
-  const currentRating = getSafetyRating(score);
-  const ratingColor = colors.status[currentRating.statusKey];
+  const safetyRating = getSafetyRating(score);
+  const ratingColor = colors.status[safetyRating.statusKey];
+
+  const radius = 60;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (score / 100) * circumference;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.recordingIndicator}>
-          <View style={[styles.recordingDot, styles.recordingDotSpacing]} />
-          <Text style={styles.recordingText}>TELEMETRY ACTIVE</Text>
+      {/* TOP APP BAR */}
+      <View style={styles.appBar}>
+        <View style={styles.appBarLeft}>
+          <View style={styles.avatar}>
+            <MaterialIcons
+              name="account-circle"
+              size={24}
+              color={colors.text.primary}
+            />
+          </View>
+          <Text style={styles.appBarTitle}>DriveSafe Pro</Text>
         </View>
-        <Text style={styles.timerText}>{formatDuration(0, elapsedMs)}</Text>
+        <MaterialIcons
+          name="verified-user"
+          size={24}
+          color={colors.brand.primary}
+        />
       </View>
 
-      {/* CORE GAUGE */}
-      <View style={styles.gaugeContainer}>
-        <View style={[styles.gaugeCircle, { borderColor: ratingColor }]}>
-          <Text style={[styles.scoreValue, { color: ratingColor }]}>
-            {score}
-          </Text>
-          <Text style={styles.scoreLabel}>SAFETY SCORE</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* STATUS INDICATOR */}
+        <View style={styles.statusWrapper}>
+          <View style={styles.statusPill}>
+            <Animated.View
+              style={[
+                styles.recordingDot,
+                { opacity: pulseAnim, backgroundColor: colors.status.poor },
+              ]}
+            />
+            <Text style={styles.statusText}>REC :: ACTIVE DRIVE</Text>
+          </View>
         </View>
-        <Text style={[styles.ratingGrade, { color: ratingColor }]}>
-          {currentRating.grade}
-        </Text>
-      </View>
 
-      {/* EVENT LOG */}
-      <View style={styles.logWrapper}>
-        <Text style={styles.logTitle}>Trip Events ({events.length})</Text>
-        <ScrollView
-          style={styles.logScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {events.length === 0 ? (
-            <Text style={styles.emptyLogText}>
-              No dangerous events detected. Keep it up.
-            </Text>
-          ) : (
-            // Reversing the array to show the newest events at the top
-            [...events].reverse().map((ev, idx) => (
-              <View key={idx} style={styles.eventCard}>
-                <View
-                  style={[
-                    styles.eventIcon,
-                    { backgroundColor: `${colors.status.poor}1A` },
-                  ]}
+        <View style={styles.grid}>
+          {/* SAFETY SCORE GAUGE */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>SAFETY SCORE</Text>
+            <View style={styles.gaugeContainer}>
+              <Svg width="160" height="160" viewBox="0 0 140 140">
+                <Circle
+                  cx="70"
+                  cy="70"
+                  r={radius}
+                  stroke={colors.border.default}
+                  strokeWidth="12"
+                  fill="none"
+                />
+                <Circle
+                  cx="70"
+                  cy="70"
+                  r={radius}
+                  stroke={ratingColor}
+                  strokeWidth="12"
+                  fill="none"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  transform="rotate(-90 70 70)"
+                />
+              </Svg>
+              <View style={styles.gaugeTextContainer}>
+                <Text style={styles.gaugeScoreText}>{score}</Text>
+              </View>
+            </View>
+            <View style={styles.trendRow}>
+              <MaterialIcons name="trending-up" size={16} color={ratingColor} />
+              <Text style={[styles.trendText, { color: ratingColor }]}>
+                Optimal
+              </Text>
+            </View>
+          </View>
+
+          {/* REAL-TIME METRICS */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>LIVE METRICS</Text>
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>Events</Text>
+                <Text
+                  style={[styles.metricValue, { color: colors.status.poor }]}
                 >
-                  <MaterialIcons
-                    name="warning"
-                    size={20}
-                    color={colors.status.poor}
-                  />
-                </View>
-                <View style={styles.eventDetails}>
-                  <Text style={styles.eventTypeName}>
-                    {ev.type.replace("_", " ")}
-                  </Text>
-                  <Text style={styles.eventForce}>
-                    Peak Force: {ev.gForce.toFixed(2)}g
-                  </Text>
-                </View>
-                <Text style={styles.eventPenalty}>
-                  - {ev.type === "AGGRESSIVE_MOVEMENT" ? 5 : 3}
+                  {events.length}
                 </Text>
               </View>
-            ))
-          )}
-        </ScrollView>
-      </View>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>Peak G-Force</Text>
+                <Text
+                  style={[styles.metricValue, { color: colors.status.good }]}
+                >
+                  {peakGForce.toFixed(2)}g
+                </Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>Score Loss</Text>
+                <Text
+                  style={[styles.metricValue, { color: colors.brand.primary }]}
+                >
+                  {100 - score}
+                </Text>
+              </View>
+            </View>
+          </View>
 
-      {/* END DRIVE ACTION */}
+          {/* SPEEDOMETER */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>CURRENT SPEED</Text>
+            <View style={styles.speedContainer}>
+              <Text style={styles.speedValue}>{speed}</Text>
+              <Text style={styles.speedUnit}>MPH</Text>
+            </View>
+            <View style={styles.speedBarBg}>
+              <View
+                style={[
+                  styles.speedBarFill,
+                  {
+                    width: `${(speed / 100) * 100}%`,
+                    backgroundColor: colors.brand.primary,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.speedLabels}>
+              <Text style={styles.speedLabelText}>0</Text>
+              <Text style={styles.speedLabelText}>50</Text>
+              <Text style={styles.speedLabelText}>100</Text>
+            </View>
+          </View>
+
+          {/* LIVE TELEMETRY CHARTS */}
+          <View style={styles.card}>
+            <View style={styles.telemetryHeader}>
+              <Text style={styles.cardLabel}>LIVE TELEMETRY</Text>
+              <Text style={styles.syncText}>SYNCING 10Hz</Text>
+            </View>
+
+            <View style={styles.chartsGrid}>
+              <View style={styles.chartBox}>
+                <Text style={styles.chartBoxTitle}>ACCEL (X,Y,Z)</Text>
+                <View style={styles.chartArea}>
+                  <Svg
+                    width="100%"
+                    height="100%"
+                    preserveAspectRatio="none"
+                    viewBox="0 0 100 40"
+                  >
+                    <Path
+                      d="M0 20 Q 10 10, 20 25 T 40 15 T 60 30 T 80 20 T 100 25"
+                      fill="none"
+                      stroke={colors.brand.primary}
+                      strokeWidth="1.5"
+                    />
+                    <Path
+                      d="M0 25 Q 15 35, 30 20 T 50 25 T 70 15 T 90 20 T 100 15"
+                      fill="none"
+                      stroke={colors.status.excellent}
+                      strokeWidth="1"
+                    />
+                  </Svg>
+                  <View
+                    style={[
+                      styles.chartGradient,
+                      { backgroundColor: `${colors.brand.primary}1A` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.chartBox}>
+                <Text style={styles.chartBoxTitle}>GYRO (Roll,Pitch)</Text>
+                <View style={styles.chartArea}>
+                  <Svg
+                    width="100%"
+                    height="100%"
+                    preserveAspectRatio="none"
+                    viewBox="0 0 100 40"
+                  >
+                    <Path
+                      d="M0 25 Q 10 30, 25 15 T 45 20 T 65 25 T 85 10 T 100 20"
+                      fill="none"
+                      stroke={colors.status.good}
+                      strokeWidth="1.5"
+                    />
+                  </Svg>
+                  <View
+                    style={[
+                      styles.chartGradient,
+                      { backgroundColor: `${colors.status.good}1A` },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* EVENT LOG */}
+          <View style={[styles.card, styles.eventLogCard]}>
+            <View style={styles.telemetryHeader}>
+              <Text style={styles.cardLabel}>EVENT LOG</Text>
+              <MaterialIcons
+                name="filter-list"
+                size={16}
+                color={colors.text.secondary}
+              />
+            </View>
+
+            {events.length === 0 ? (
+              <View style={styles.emptyLog}>
+                <Animated.View style={{ opacity: pulseAnim }}>
+                  <MaterialIcons
+                    name="radar"
+                    size={40}
+                    color={colors.text.secondary}
+                    style={{ marginBottom: 8 }}
+                  />
+                </Animated.View>
+                <Text style={styles.scanningText}>
+                  Scanning for anomalies...
+                </Text>
+                <Text style={styles.noEventsText}>
+                  No critical events detected yet.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.eventList}>
+                {[...events].reverse().map((ev, i) => (
+                  <View key={i} style={styles.eventRow}>
+                    <View
+                      style={[
+                        styles.eventDot,
+                        { backgroundColor: colors.status.poor },
+                      ]}
+                    />
+                    <Text style={styles.eventTypeText}>
+                      {ev.type.replace("_", " ")}
+                    </Text>
+                    <Text style={styles.eventGForce}>
+                      {ev.gForce.toFixed(2)}g
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* FLOATING END DRIVE BUTTON */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.endButton} onPress={handleEndDrive}>
+        <TouchableOpacity
+          style={[styles.endButton, { backgroundColor: colors.status.poor }]}
+          onPress={handleEndDrive}
+        >
           <MaterialIcons
             name="stop-circle"
             size={24}
             color={colors.text.inverse}
-            style={styles.endButtonIcon}
           />
-          <Text style={styles.endButtonText}>End Drive</Text>
+          <Text style={[styles.endButtonText, { color: colors.text.inverse }]}>
+            END DRIVE
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-// Dynamic StyleSheet Factory
 const createStyles = (colors: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background.primary,
     },
-    header: {
+    appBar: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 24,
-      paddingTop: 20,
-      marginBottom: 40,
+      paddingHorizontal: 20,
+      height: 64,
+      backgroundColor: colors.background.secondary,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.default,
+      zIndex: 10,
     },
-    recordingIndicator: {
+    appBarLeft: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: `${colors.status.poor}1A`,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: `${colors.status.poor}40`,
+      gap: 12,
     },
-    recordingDotSpacing: {
-      marginRight: 8,
+    avatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.border.default,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    appBarTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text.primary,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingTop: 32,
+      paddingBottom: 120,
+    },
+    statusWrapper: {
+      alignItems: "center",
+      marginBottom: 24,
+    },
+    statusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: colors.background.secondary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
     },
     recordingDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: colors.status.poor,
     },
-    recordingText: {
-      color: colors.status.poor,
-      fontSize: 10,
-      fontFamily: "monospace", // Or your JetBrains Mono
-      letterSpacing: 1,
-    },
-    timerText: {
-      color: colors.text.primary,
-      fontSize: 18,
+    statusText: {
       fontFamily: "monospace",
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    grid: {
+      gap: 16,
+    },
+    card: {
+      backgroundColor: colors.background.secondary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      borderRadius: 16,
+      padding: 24,
+      shadowColor: "#000",
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 2,
+    },
+    cardLabel: {
+      fontSize: 12,
       fontWeight: "600",
+      color: colors.text.secondary,
+      letterSpacing: 1,
+      marginBottom: 16,
     },
     gaugeContainer: {
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: 40,
+      height: 160,
     },
-    gaugeCircle: {
-      width: 240,
-      height: 240,
-      borderRadius: 120,
-      borderWidth: 12,
+    gaugeTextContainer: {
+      position: "absolute",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.background.secondary,
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 20,
-      elevation: 10,
     },
-    scoreValue: {
-      fontSize: 72,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-    },
-    scoreLabel: {
-      fontSize: 12,
-      color: colors.text.secondary,
-      letterSpacing: 2,
-      marginTop: -5,
-    },
-    ratingGrade: {
-      fontSize: 20,
+    gaugeScoreText: {
+      fontSize: 48,
       fontWeight: "700",
-      marginTop: 24,
-      letterSpacing: 1,
-    },
-    logWrapper: {
-      flex: 1,
-      paddingHorizontal: 24,
-    },
-    logTitle: {
-      fontSize: 16,
-      fontWeight: "600",
       color: colors.text.primary,
-      marginBottom: 16,
     },
-    logScroll: {
-      flex: 1,
-    },
-    emptyLogText: {
-      color: colors.text.secondary,
-      textAlign: "center",
-      marginTop: 20,
-      fontStyle: "italic",
-    },
-    eventCard: {
+    trendRow: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.background.secondary,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.border.default,
-    },
-    eventIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 8,
-      alignItems: "center",
       justifyContent: "center",
-      marginRight: 16,
+      gap: 4,
+      marginTop: 16,
     },
-    eventDetails: {
-      flex: 1,
-    },
-    eventTypeName: {
-      color: colors.text.primary,
-      fontWeight: "600",
+    trendText: {
       fontSize: 14,
-      marginBottom: 4,
+      fontFamily: "monospace",
+      fontWeight: "600",
     },
-    eventForce: {
+    metricsGrid: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 12,
+      marginTop: 12,
+    },
+    metricBox: {
+      flex: 1,
+      backgroundColor: `${colors.brand.primary}10`,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: `${colors.brand.primary}20`,
+    },
+    metricLabel: {
+      fontSize: 11,
       color: colors.text.secondary,
-      fontSize: 12,
+      fontWeight: "500",
+      marginBottom: 6,
+      textTransform: "uppercase",
+    },
+    metricValue: {
+      fontSize: 20,
+      fontWeight: "700",
       fontFamily: "monospace",
     },
-    eventPenalty: {
-      color: colors.status.poor,
-      fontSize: 18,
+    speedContainer: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+    },
+    speedValue: {
+      fontSize: 48,
       fontWeight: "700",
+      color: colors.text.primary,
+      fontFamily: "monospace",
+      letterSpacing: -2,
+    },
+    speedUnit: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      fontFamily: "monospace",
+    },
+    speedBarBg: {
+      width: "100%",
+      height: 4,
+      backgroundColor: colors.border.default,
+      borderRadius: 2,
+      marginTop: 24,
+      overflow: "hidden",
+    },
+    speedBarFill: {
+      height: "100%",
+      borderRadius: 2,
+    },
+    speedLabels: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 8,
+    },
+    speedLabelText: {
+      fontSize: 10,
+      fontFamily: "monospace",
+      color: colors.text.secondary,
+    },
+    telemetryHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    syncText: {
+      fontSize: 10,
+      fontFamily: "monospace",
+      color: colors.brand.primary,
+    },
+    chartsGrid: {
+      flexDirection: "row",
+      gap: 16,
+    },
+    chartBox: {
+      flex: 1,
+      backgroundColor: colors.background.primary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      borderRadius: 8,
+      padding: 12,
+    },
+    chartBoxTitle: {
+      fontSize: 10,
+      fontFamily: "monospace",
+      color: colors.text.primary,
+      marginBottom: 8,
+    },
+    chartArea: {
+      height: 64,
+      width: "100%",
+      justifyContent: "flex-end",
+    },
+    chartGradient: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      width: "100%",
+      height: 24,
+    },
+    eventLogCard: {
+      minHeight: 200,
+    },
+    emptyLog: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      opacity: 0.6,
+    },
+    scanningText: {
+      fontSize: 14,
+      fontFamily: "monospace",
+      color: colors.text.secondary,
+      marginBottom: 4,
+    },
+    noEventsText: {
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    eventList: {
+      marginTop: 8,
+    },
+    eventRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.default,
+    },
+    eventDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 12,
+    },
+    eventTypeText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text.primary,
+      textTransform: "capitalize",
+    },
+    eventGForce: {
+      fontSize: 14,
+      fontFamily: "monospace",
+      color: colors.text.secondary,
     },
     footer: {
-      paddingHorizontal: 24,
-      paddingBottom: 34,
-      paddingTop: 16,
+      position: "absolute",
+      bottom: 34,
+      left: 20,
+      right: 20,
     },
     endButton: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.status.poor, // Crimson red for destructive stop action
       height: 64,
-      borderRadius: 12,
-    },
-    endButtonIcon: {
-      marginRight: 8,
+      borderRadius: 32,
+      gap: 12,
+      shadowColor: "#000",
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 8,
     },
     endButtonText: {
-      color: colors.text.inverse,
       fontSize: 20,
       fontWeight: "700",
+      letterSpacing: 1,
     },
   });

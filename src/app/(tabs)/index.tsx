@@ -1,16 +1,16 @@
-// /src/app/(tabs)/index.tsx
-
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import Svg, { Circle } from "react-native-svg";
 
 import { useHistoryStore } from "../../store/useHistoryStore";
 import { useAppTheme } from "../../hooks/useAppTheme";
@@ -23,7 +23,6 @@ export default function DashboardScreen() {
 
   const { sessions } = useHistoryStore();
 
-  // Calculate aggregates memoized so it only recalculates when sessions change
   const { averageScore, totalDrives, totalDriveTime } = useMemo(() => {
     if (sessions.length === 0)
       return { averageScore: 100, totalDrives: 0, totalDriveTime: 0 };
@@ -47,130 +46,237 @@ export default function DashboardScreen() {
   const rating = getSafetyRating(averageScore);
   const ratingColor = colors.status[rating.statusKey];
 
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseOpacity = useRef(new Animated.Value(0.7)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pulseOpacity, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseOpacity, {
+            toValue: 0.7,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    ).start();
+  }, []);
+
+  const chartData = [
+    { day: "M", value: 85 },
+    { day: "T", value: 92 },
+    { day: "W", value: 70 },
+    { day: "T", value: 95 },
+    { day: "F", value: 88 },
+    { day: "S", value: 78 },
+    { day: "S", value: 98 },
+  ];
+
+  const radius = 16;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (averageScore / 100) * circumference;
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* TOP APP BAR */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.avatar}>
+            <MaterialIcons
+              name="person"
+              size={20}
+              color={colors.text.secondary}
+            />
+          </View>
+          <Text style={styles.headerTitle}>DriveSafe Pro</Text>
+        </View>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: `${colors.status.excellent}33` },
+          ]}
+        >
+          <MaterialIcons
+            name="verified-user"
+            size={16}
+            color={colors.status.excellent}
+          />
+          <Text
+            style={[styles.statusBadgeText, { color: colors.status.excellent }]}
+          >
+            SAFE
+          </Text>
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER SECTION */}
-        <View style={styles.header}>
-          <Text style={styles.greeting}>Welcome back,</Text>
-          <Text style={styles.title}>Driver Overview</Text>
-        </View>
-
-        {/* PRIMARY ACTION: How the user gets to drive.tsx */}
-        <TouchableOpacity
-          style={styles.startDriveBtn}
-          activeOpacity={0.9}
-          onPress={() => router.push("/drive")} // THIS IS THE ROUTING TRIGGER
-        >
-          <View style={styles.btnContent}>
-            <View style={styles.iconWrapper}>
-              <MaterialIcons
-                name="directions-car"
-                size={32}
-                color={colors.brand.primary}
-              />
-            </View>
-            <View style={styles.btnTextWrapper}>
-              <Text style={styles.btnTitle}>Start New Drive</Text>
-              <Text style={styles.btnSub}>Enable telemetry tracking</Text>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={32}
-              color={colors.text.secondary}
-            />
-          </View>
-        </TouchableOpacity>
-
-        {/* METRICS GRID */}
-        <View style={styles.metricsGrid}>
+        {/* STATS GRID */}
+        <View style={styles.grid}>
           {/* Main Score Card */}
-          <View
-            style={[
-              styles.metricCard,
-              styles.mainMetricCard,
-              { borderColor: ratingColor },
-            ]}
-          >
-            <Text style={styles.metricLabel}>ALL-TIME SCORE</Text>
-            <Text style={[styles.metricValueLarge, { color: ratingColor }]}>
-              {averageScore}
-            </Text>
-            <Text style={[styles.metricGrade, { color: ratingColor }]}>
-              {rating.grade}
-            </Text>
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreCardTop}>
+              <View>
+                <Text style={styles.cardLabel}>AVG. SCORE</Text>
+                <View style={styles.scoreRow}>
+                  <Text style={styles.scoreLarge}>{averageScore}</Text>
+                  <Text style={styles.scoreMax}>/100</Text>
+                </View>
+              </View>
+
+              {/* Circular SVG Gauge */}
+              <View style={styles.gaugeContainer}>
+                <Svg width="48" height="48" viewBox="0 0 36 36">
+                  <Circle
+                    cx="18"
+                    cy="18"
+                    r={radius}
+                    stroke={colors.border.default}
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <Circle
+                    cx="18"
+                    cy="18"
+                    r={radius}
+                    stroke={ratingColor}
+                    strokeWidth="4"
+                    fill="none"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    transform="rotate(-90 18 18)"
+                  />
+                </Svg>
+              </View>
+            </View>
+            <View style={styles.trendRow}>
+              <MaterialIcons
+                name="trending-up"
+                size={16}
+                color={colors.status.excellent}
+              />
+              <Text
+                style={[styles.trendText, { color: colors.status.excellent }]}
+              >
+                {sessions.length > 0
+                  ? "Tracking active"
+                  : "Start driving to track"}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.secondaryMetrics}>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>TRIPS</Text>
-              <Text style={styles.metricValue}>{totalDrives}</Text>
+          {/* Secondary Stats */}
+          <View style={styles.secondaryGrid}>
+            <View style={styles.miniCard}>
+              <View style={styles.miniCardHeader}>
+                <MaterialIcons
+                  name="directions-car"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+                <Text style={styles.cardLabel}>TOTAL TRIPS</Text>
+              </View>
+              <Text style={styles.miniCardValue}>{totalDrives}</Text>
             </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>TIME</Text>
-              <Text style={styles.metricValue}>
-                {formatDuration(0, totalDriveTime)}
+            <View style={styles.miniCard}>
+              <View style={styles.miniCardHeader}>
+                <MaterialIcons
+                  name="timer"
+                  size={20}
+                  color={colors.text.secondary}
+                />
+                <Text style={styles.cardLabel}>TIME LOGGED</Text>
+              </View>
+              {/* Using total duration instead of miles to match our engine capabilities */}
+              <Text style={styles.miniCardValue}>
+                {totalDrives > 0 ? formatDuration(0, totalDriveTime) : "0m"}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* RECENT TRIPS PREVIEW */}
-        <View style={styles.recentSection}>
-          <View style={styles.recentHeader}>
-            <Text style={styles.recentTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/history")}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
+        {/* RECENT PERFORMANCE CHART */}
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.chartTitle}>Recent Performance</Text>
+            <Text style={styles.chartSubtitle}>7 Days</Text>
           </View>
 
-          {sessions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons
-                name="timeline"
-                size={48}
-                color={colors.border.default}
-              />
-              <Text style={styles.emptyStateText}>No drives recorded yet.</Text>
-            </View>
-          ) : (
-            sessions.slice(0, 3).map((session) => {
-              const sessionRating = getSafetyRating(session.totalScore);
-              return (
-                <View key={session.id} style={styles.tripCard}>
-                  <View style={styles.tripLeft}>
-                    <Text style={styles.tripDate}>{session.formattedDate}</Text>
-                    <Text style={styles.tripDetails}>
-                      {formatDuration(session.startTime, session.endTime)} •{" "}
-                      {session.eventCount} events
-                    </Text>
-                  </View>
+          <View style={styles.barsContainer}>
+            {chartData.map((data, index) => (
+              <View key={index} style={styles.barColumn}>
+                <View style={styles.barTrack}>
+                  {/* Dynamic coloring based on the score value */}
                   <View
                     style={[
-                      styles.scoreBadge,
+                      styles.barFill,
                       {
-                        backgroundColor: `${colors.status[sessionRating.statusKey]}1A`,
+                        height: `${data.value}%`,
+                        backgroundColor:
+                          data.value < 75
+                            ? colors.brand.accent
+                            : colors.status.excellent,
                       },
                     ]}
-                  >
-                    <Text
-                      style={[
-                        styles.scoreBadgeText,
-                        { color: colors.status[sessionRating.statusKey] },
-                      ]}
-                    >
-                      {session.totalScore}
-                    </Text>
-                  </View>
+                  />
                 </View>
-              );
-            })
-          )}
+                <Text style={styles.barLabel}>{data.day}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
+
+      {/* FLOATING ACTION BUTTON (START DRIVE) */}
+      <View style={styles.fabContainer}>
+        {/* Animated Pulse Ring */}
+        <Animated.View
+          style={[
+            styles.fabPulse,
+            {
+              transform: [{ scale: pulseAnim }],
+              opacity: pulseOpacity,
+              backgroundColor: colors.brand.accent,
+            },
+          ]}
+        />
+        {/* Actual Button */}
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.brand.accent }]}
+          activeOpacity={0.8}
+          onPress={() => router.push("/drive")}
+        >
+          <MaterialIcons
+            name="play-arrow"
+            size={32}
+            color={colors.text.inverse}
+          />
+          <Text style={[styles.fabText, { color: colors.text.inverse }]}>
+            START
+          </Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -181,172 +287,214 @@ const createStyles = (colors: any) =>
       flex: 1,
       backgroundColor: colors.background.primary,
     },
-    scrollContent: {
-      padding: 24,
-      paddingBottom: 40,
-    },
     header: {
-      marginBottom: 32,
-      marginTop: 16,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      height: 64,
+      borderBottomWidth: 1,
+      borderBottomColor: "rgba(255,255,255,0.05)",
     },
-    greeting: {
-      fontSize: 16,
-      color: colors.text.secondary,
-      marginBottom: 4,
-    },
-    title: {
-      fontSize: 32,
-      fontWeight: "700",
-      color: colors.text.primary,
-      letterSpacing: -0.5,
-    },
-    startDriveBtn: {
-      backgroundColor: colors.background.secondary,
-      borderRadius: 20,
-      padding: 20,
-      marginBottom: 32,
-      borderWidth: 1,
-      borderColor: colors.border.default,
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      elevation: 4,
-    },
-    btnContent: {
+    headerLeft: {
       flexDirection: "row",
       alignItems: "center",
+      gap: 12,
     },
-    iconWrapper: {
-      width: 56,
-      height: 56,
+    avatar: {
+      width: 32,
+      height: 32,
       borderRadius: 16,
-      backgroundColor: `${colors.brand.primary}1A`,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      backgroundColor: colors.background.secondary,
       alignItems: "center",
       justifyContent: "center",
-      marginRight: 16,
     },
-    btnTextWrapper: {
-      flex: 1,
-    },
-    btnTitle: {
+    headerTitle: {
       fontSize: 20,
       fontWeight: "700",
       color: colors.text.primary,
-      marginBottom: 4,
     },
-    btnSub: {
-      fontSize: 14,
-      color: colors.text.secondary,
-    },
-    metricsGrid: {
+    statusBadge: {
       flexDirection: "row",
-      gap: 16,
-      marginBottom: 32,
-    },
-    mainMetricCard: {
-      flex: 1.5,
-      justifyContent: "center",
       alignItems: "center",
-      borderWidth: 2,
-    },
-    secondaryMetrics: {
-      flex: 1,
-      gap: 16,
-    },
-    metricCard: {
-      backgroundColor: colors.background.secondary,
-      padding: 16,
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
       borderRadius: 16,
+    },
+    statusBadgeText: {
+      fontSize: 12,
+      fontWeight: "600",
+      fontFamily: "monospace",
+      letterSpacing: 1,
+    },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 160, // Leave room for the FAB and Bottom Nav
+    },
+    grid: {
+      gap: 16,
+      marginBottom: 16,
+    },
+    scoreCard: {
+      backgroundColor: colors.background.secondary,
       borderWidth: 1,
       borderColor: colors.border.default,
+      borderRadius: 16,
+      padding: 24,
     },
-    metricLabel: {
+    scoreCardTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 16,
+    },
+    cardLabel: {
       fontSize: 12,
-      color: colors.text.secondary,
       fontWeight: "600",
+      color: colors.text.secondary,
       letterSpacing: 1,
-      marginBottom: 8,
+      marginBottom: 4,
     },
-    metricValueLarge: {
+    scoreRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+    },
+    scoreLarge: {
       fontSize: 48,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-    },
-    metricGrade: {
-      fontSize: 16,
-      fontWeight: "700",
-      marginTop: 4,
-    },
-    metricValue: {
-      fontSize: 24,
       fontWeight: "700",
       color: colors.text.primary,
     },
-    recentSection: {
-      marginTop: 8,
+    scoreMax: {
+      fontSize: 16,
+      color: colors.status.excellent,
+      fontFamily: "monospace",
     },
-    recentHeader: {
+    gaugeContainer: {
+      width: 48,
+      height: 48,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    trendRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    trendText: {
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    secondaryGrid: {
+      flexDirection: "row",
+      gap: 16,
+    },
+    miniCard: {
+      flex: 1,
+      backgroundColor: colors.background.secondary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      borderRadius: 16,
+      padding: 16,
+      height: 120,
+      justifyContent: "space-between",
+    },
+    miniCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12,
+    },
+    miniCardValue: {
+      fontSize: 28,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    chartCard: {
+      backgroundColor: colors.background.secondary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
+      borderRadius: 16,
+      padding: 24,
+    },
+    chartHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 24,
+    },
+    chartTitle: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    chartSubtitle: {
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    barsContainer: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-end",
-      marginBottom: 16,
+      height: 120,
+      gap: 8,
     },
-    recentTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: colors.text.primary,
+    barColumn: {
+      flex: 1,
+      alignItems: "center",
+      gap: 8,
+      height: "100%",
     },
-    seeAllText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.brand.primary,
+    barTrack: {
+      width: "100%",
+      flex: 1,
+      backgroundColor: colors.background.primary,
+      borderRadius: 4,
+      justifyContent: "flex-end",
+      overflow: "hidden",
     },
-    emptyState: {
+    barFill: {
+      width: "100%",
+      borderRadius: 4,
+    },
+    barLabel: {
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    fabContainer: {
+      position: "absolute",
+      bottom: 24, // Sits exactly above the layout tab bar
+      alignSelf: "center",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 40,
-      backgroundColor: colors.background.secondary,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.border.default,
-      borderStyle: "dashed",
+      width: 96,
+      height: 96,
     },
-    emptyStateText: {
-      marginTop: 12,
-      fontSize: 14,
-      color: colors.text.secondary,
+    fabPulse: {
+      position: "absolute",
+      width: 96,
+      height: 96,
+      borderRadius: 48,
     },
-    tripCard: {
-      flexDirection: "row",
-      justifyContent: "space-between",
+    fab: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
       alignItems: "center",
-      backgroundColor: colors.background.secondary,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.border.default,
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 15,
+      elevation: 10,
     },
-    tripLeft: {
-      flex: 1,
-    },
-    tripDate: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.text.primary,
-      marginBottom: 4,
-    },
-    tripDetails: {
-      fontSize: 14,
-      color: colors.text.secondary,
-    },
-    scoreBadge: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 12,
-    },
-    scoreBadgeText: {
-      fontSize: 20,
-      fontWeight: "800",
+    fabText: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 1,
+      marginTop: 2,
     },
   });

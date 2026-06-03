@@ -14,8 +14,12 @@ interface DriveState {
 }
 
 const PENALTIES: Record<TelemetryEvent["type"], number> = {
-  AGGRESSIVE_MOVEMENT: 5,
-  sharp_turn: 3,
+  HARSH_BRAKING: 5,
+  HARSH_ACCELERATION: 5,
+  SHARP_TURN: 4,
+  AGGRESSIVE_STEERING: 5,
+  EXCESSIVE_MOVEMENT: 4,
+  PHONE_HANDLING: 3,
 };
 
 export const useDriveStore = create<DriveState>((set) => ({
