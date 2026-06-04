@@ -11,7 +11,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
-
 import { useHistoryStore } from "../../store/useHistoryStore";
 import { useAppTheme } from "../../hooks/useAppTheme";
 import { getSafetyRating, formatDuration } from "../../utils/formatters";
@@ -96,7 +95,6 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* TOP APP BAR */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatar}>
@@ -131,9 +129,7 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* STATS GRID */}
         <View style={styles.grid}>
-          {/* Main Score Card */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreCardTop}>
               <View>
@@ -144,7 +140,6 @@ export default function DashboardScreen() {
                 </View>
               </View>
 
-              {/* Circular SVG Gauge */}
               <View style={styles.gaugeContainer}>
                 <Svg width="48" height="48" viewBox="0 0 36 36">
                   <Circle
@@ -186,7 +181,6 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Secondary Stats */}
           <View style={styles.secondaryGrid}>
             <View style={styles.miniCard}>
               <View style={styles.miniCardHeader}>
@@ -208,7 +202,6 @@ export default function DashboardScreen() {
                 />
                 <Text style={styles.cardLabel}>TIME LOGGED</Text>
               </View>
-              {/* Using total duration instead of miles to match our engine capabilities */}
               <Text style={styles.miniCardValue}>
                 {totalDrives > 0 ? formatDuration(0, totalDriveTime) : "0m"}
               </Text>
@@ -216,7 +209,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* RECENT PERFORMANCE CHART */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <Text style={styles.chartTitle}>Recent Performance</Text>
@@ -227,7 +219,6 @@ export default function DashboardScreen() {
             {chartData.map((data, index) => (
               <View key={index} style={styles.barColumn}>
                 <View style={styles.barTrack}>
-                  {/* Dynamic coloring based on the score value */}
                   <View
                     style={[
                       styles.barFill,
@@ -248,9 +239,7 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* FLOATING ACTION BUTTON (START DRIVE) */}
       <View style={styles.fabContainer}>
-        {/* Animated Pulse Ring */}
         <Animated.View
           style={[
             styles.fabPulse,
@@ -261,7 +250,6 @@ export default function DashboardScreen() {
             },
           ]}
         />
-        {/* Actual Button */}
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: colors.brand.accent }]}
           activeOpacity={0.8}

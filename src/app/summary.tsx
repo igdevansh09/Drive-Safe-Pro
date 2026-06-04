@@ -14,7 +14,26 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { EventTimeline } from "../components/summary/EventTimeline";
 import { useAppTheme } from "../hooks/useAppTheme";
 import { useHistoryStore } from "../store/useHistoryStore";
+import { PENALTIES } from "../store/useDriveStore";
 import { formatDuration, getSafetyRating } from "../utils/formatters";
+
+const EVENT_ICON_MAP: Record<string, string> = {
+  HARSH_BRAKING: "do-not-disturb",
+  HARSH_ACCELERATION: "speed",
+  SHARP_TURN: "alt-route",
+  AGGRESSIVE_STEERING: "swap-calls",
+  EXCESSIVE_MOVEMENT: "screen-rotation",
+  PHONE_HANDLING: "phone-iphone",
+};
+
+const EVENT_SEVERITY_MAP: Record<string, "poor" | "fair" | "good"> = {
+  HARSH_BRAKING: "poor",
+  HARSH_ACCELERATION: "poor",
+  SHARP_TURN: "fair",
+  AGGRESSIVE_STEERING: "fair",
+  EXCESSIVE_MOVEMENT: "fair",
+  PHONE_HANDLING: "poor",
+};
 
 export default function SummaryScreen() {
   const router = useRouter();
@@ -46,22 +65,13 @@ export default function SummaryScreen() {
     .reduce((max, ev) => Math.max(max, ev.gForce), 0)
     .toFixed(2);
 
-  const eventPenaltyMap: Record<string, number> = {
-    HARSH_BRAKING: 5,
-    HARSH_ACCELERATION: 5,
-    SHARP_TURN: 4,
-    AGGRESSIVE_STEERING: 5,
-    EXCESSIVE_MOVEMENT: 4,
-    PHONE_HANDLING: 3,
-  };
-
   const eventBreakdown = recentSession.events.reduce(
     (acc, ev) => {
       if (!acc[ev.type]) {
         acc[ev.type] = { count: 0, penalty: 0 };
       }
       acc[ev.type].count += 1;
-      acc[ev.type].penalty += eventPenaltyMap[ev.type] ?? 3;
+      acc[ev.type].penalty += PENALTIES[ev.type] ?? 3;
       return acc;
     },
     {} as Record<string, { count: number; penalty: number }>,
@@ -77,15 +87,12 @@ export default function SummaryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* TOP MAP/GRADIENT ANCHOR */}
       <View style={styles.topAnchor}>
-        {/* Simulating the dark map background with a gradient */}
         <LinearGradient
           colors={[colors.brand.primary + "20", colors.background.primary]}
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Floating Top Bar */}
         <SafeAreaView>
           <View style={styles.topBar}>
             <Text style={styles.headerTitle}>Session Summary</Text>
@@ -102,7 +109,6 @@ export default function SummaryScreen() {
           </View>
         </SafeAreaView>
 
-        {/* Floating Score Bento Card */}
         <View style={styles.scoreBento}>
           <View>
             <Text style={styles.scoreLabel}>Safety Score</Text>
@@ -130,7 +136,6 @@ export default function SummaryScreen() {
         </View>
       </View>
 
-      {/* MAIN SCROLLABLE CONTENT */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -178,7 +183,6 @@ export default function SummaryScreen() {
           </View>
         </View>
 
-        {/* AI Feedback Card */}
         <View style={styles.aiCard}>
           <MaterialIcons
             name="psychology"
@@ -194,7 +198,6 @@ export default function SummaryScreen() {
           </View>
         </View>
 
-        {/* Event Timeline */}
         <View style={styles.timelineSection}>
           <Text style={styles.timelineTitle}>Event Timeline</Text>
           <EventTimeline
@@ -205,7 +208,6 @@ export default function SummaryScreen() {
           />
         </View>
 
-        {/* Detailed Event Breakdown */}
         <View style={styles.breakdownSection}>
           <Text style={styles.breakdownTitle}>Event Breakdown</Text>
 
@@ -217,11 +219,9 @@ export default function SummaryScreen() {
             </View>
           ) : (
             Object.entries(eventBreakdown).map(([type, data], index) => {
-              const isAggressive = type === "AGGRESSIVE_MOVEMENT";
-              const iconColor = isAggressive
-                ? colors.status.poor
-                : colors.status.fair;
-              const iconName = isAggressive ? "speed" : "alt-route";
+              const severityKey = EVENT_SEVERITY_MAP[type] ?? "fair";
+              const iconColor = colors.status[severityKey];
+              const iconName = EVENT_ICON_MAP[type] ?? "warning";
 
               return (
                 <View key={index} style={styles.eventItem}>
@@ -232,14 +232,14 @@ export default function SummaryScreen() {
                     ]}
                   >
                     <MaterialIcons
-                      name={iconName}
+                      name={iconName as any}
                       size={20}
                       color={iconColor}
                     />
                   </View>
                   <View style={styles.eventInfo}>
                     <Text style={styles.eventName}>
-                      {type.replace("_", " ")}
+                      {type.replace(/_/g, " ")}
                     </Text>
                     <Text style={styles.eventCount}>
                       {data.count}{" "}
@@ -263,7 +263,6 @@ export default function SummaryScreen() {
         </View>
       </ScrollView>
 
-      {/* BOTTOM ACTION AREA */}
       <LinearGradient
         colors={[
           "transparent",
@@ -389,9 +388,9 @@ const createStyles = (colors: any) =>
       fontWeight: "600",
     },
     scrollContent: {
-      paddingTop: 48, // Space for the overlapping bento box
+      paddingTop: 48,
       paddingHorizontal: 20,
-      paddingBottom: 120, // Space for the floating bottom button
+      paddingBottom: 120,
     },
     metadataRow: {
       flexDirection: "row",
@@ -423,9 +422,9 @@ const createStyles = (colors: any) =>
     },
     aiCard: {
       flexDirection: "row",
-      backgroundColor: `${colors.brand.primary}0D`, // 5% opacity
+      backgroundColor: `${colors.brand.primary}0D`,
       borderWidth: 1,
-      borderColor: `${colors.brand.primary}33`, // 20% opacity
+      borderColor: `${colors.brand.primary}33`,
       borderRadius: 12,
       padding: 20,
       gap: 16,

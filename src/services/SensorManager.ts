@@ -4,6 +4,7 @@ import {
   Gyroscope,
   Magnetometer,
 } from "expo-sensors";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake"; 
 import { ENGINE_CONFIG } from "../constants/thresholds";
 import { CircularBuffer } from "./BufferQueue";
 import { EventDetector, SensorFrame, TelemetryEvent } from "./EventDetector";
@@ -23,24 +24,52 @@ export class SensorManager {
   private currentDeviceMotion = { x: 0, y: 0, z: 0 };
   private currentMagnet = { x: 0, y: 0, z: 0 };
   private onEventDetected: (event: TelemetryEvent) => void;
+  private latestCallback: (event: TelemetryEvent) => void;
 
   constructor(onEvent: (event: TelemetryEvent) => void) {
     this.processor = new SignalProcessor(ENGINE_CONFIG.LOW_PASS_FILTER_ALPHA);
     this.buffer = new CircularBuffer<SensorFrame>(ENGINE_CONFIG.BUFFER_SIZE);
     this.detector = new EventDetector();
     this.onEventDetected = onEvent;
+    this.latestCallback = onEvent;
   }
 
-  public startDrive(): void {
+  public updateCallback(onEvent: (event: TelemetryEvent) => void): void {
+    this.latestCallback = onEvent;
+  }
+
+  public async startDrive(): Promise<void> {
     if (this.ticker) {
       console.warn("Drive pipeline already active.");
       return;
     }
 
-    Accelerometer.setUpdateInterval(80);
-    Gyroscope.setUpdateInterval(80);
-    DeviceMotion.setUpdateInterval(80);
-    Magnetometer.setUpdateInterval(80);
+    const [accelPerm, gyroPerm, motionPerm, magnetPerm] = await Promise.all([
+      Accelerometer.requestPermissionsAsync(),
+      Gyroscope.requestPermissionsAsync(),
+      DeviceMotion.requestPermissionsAsync(),
+      Magnetometer.requestPermissionsAsync(),
+    ]);
+
+    const allGranted =
+      accelPerm.granted &&
+      gyroPerm.granted &&
+      motionPerm.granted &&
+      magnetPerm.granted;
+
+    if (!allGranted) {
+      console.warn(
+        "SensorManager: one or more sensor permissions were denied.",
+        { accelPerm, gyroPerm, motionPerm, magnetPerm },
+      );
+    }
+
+    await activateKeepAwakeAsync("drive-session");
+
+    Accelerometer.setUpdateInterval(ENGINE_CONFIG.POLLING_INTERVAL_MS);
+    Gyroscope.setUpdateInterval(ENGINE_CONFIG.POLLING_INTERVAL_MS);
+    DeviceMotion.setUpdateInterval(ENGINE_CONFIG.POLLING_INTERVAL_MS);
+    Magnetometer.setUpdateInterval(ENGINE_CONFIG.POLLING_INTERVAL_MS);
 
     this.accelSub = Accelerometer.addListener((data) => {
       this.currentRawAccel = data;
@@ -80,7 +109,7 @@ export class SensorManager {
     if (this.buffer.isFull()) {
       const event = this.detector.analyzeWindow(this.buffer.toArray());
       if (event) {
-        this.onEventDetected(event);
+        this.latestCallback(event);
       }
     }
   }
@@ -110,6 +139,8 @@ export class SensorManager {
       this.magnetSub.remove();
       this.magnetSub = null;
     }
+
+    deactivateKeepAwake("drive-session");
 
     this.buffer.clear();
     this.processor.reset();

@@ -4,6 +4,7 @@ export const lightTheme: ThemeColors = {
   background: {
     primary: "#fcf9f8",
     secondary: "#ffffff",
+    tertiary: "#f0eeee", 
   },
   text: {
     primary: "#1c1b1b",
@@ -29,6 +30,7 @@ export const darkTheme: ThemeColors = {
   background: {
     primary: "#131313",
     secondary: "#1c1b1b",
+    tertiary: "#242424", 
   },
   text: {
     primary: "#e5e2e1",

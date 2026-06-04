@@ -35,7 +35,13 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow SafeDrive to access your device motion to track and analyze driving telemetry."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

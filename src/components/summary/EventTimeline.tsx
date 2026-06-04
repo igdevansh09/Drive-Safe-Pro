@@ -10,6 +10,24 @@ interface EventTimelineProps {
   colors: any;
 }
 
+const EVENT_ICON_MAP: Record<string, string> = {
+  HARSH_BRAKING: "do-not-disturb",
+  HARSH_ACCELERATION: "speed",
+  SHARP_TURN: "alt-route",
+  AGGRESSIVE_STEERING: "swap-calls",
+  EXCESSIVE_MOVEMENT: "screen-rotation",
+  PHONE_HANDLING: "phone-iphone",
+};
+
+const EVENT_STATUS_KEY: Record<string, "poor" | "fair"> = {
+  HARSH_BRAKING: "poor",
+  HARSH_ACCELERATION: "poor",
+  SHARP_TURN: "fair",
+  AGGRESSIVE_STEERING: "fair",
+  EXCESSIVE_MOVEMENT: "fair",
+  PHONE_HANDLING: "poor",
+};
+
 export function EventTimeline({
   events,
   startTime,
@@ -17,24 +35,6 @@ export function EventTimeline({
   colors,
 }: EventTimelineProps) {
   const totalDuration = endTime - startTime;
-
-  const eventIconMap: Record<string, string> = {
-    HARSH_BRAKING: "braking-stop",
-    HARSH_ACCELERATION: "speed",
-    SHARP_TURN: "alt-route",
-    AGGRESSIVE_STEERING: "zig-zag-up",
-    EXCESSIVE_MOVEMENT: "screen-rotation",
-    PHONE_HANDLING: "phone-iphone",
-  };
-
-  const eventColorMap: Record<string, string> = {
-    HARSH_BRAKING: colors.status.poor,
-    HARSH_ACCELERATION: colors.status.poor,
-    SHARP_TURN: colors.status.fair,
-    AGGRESSIVE_STEERING: colors.status.fair,
-    EXCESSIVE_MOVEMENT: colors.status.fair,
-    PHONE_HANDLING: colors.status.poor,
-  };
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => a.timestamp - b.timestamp),
@@ -63,19 +63,19 @@ export function EventTimeline({
 
         {sortedEvents.map((event, index) => {
           const relativeTime = event.timestamp - startTime;
-          const positionPercent = (relativeTime / totalDuration) * 100;
-          const iconName = eventIconMap[event.type] || "alert-circle";
-          const eventColor = eventColorMap[event.type] || colors.text.secondary;
+
+          const rawPercent =
+            totalDuration > 0 ? (relativeTime / totalDuration) * 100 : 0;
+          const positionPercent = Math.min(98, Math.max(2, rawPercent));
+
+          const iconName = EVENT_ICON_MAP[event.type] ?? "warning";
+          const statusKey = EVENT_STATUS_KEY[event.type] ?? "fair";
+          const eventColor = colors.status[statusKey];
 
           return (
             <View
               key={`${event.timestamp}-${index}`}
-              style={[
-                styles.eventMarker,
-                {
-                  left: `${positionPercent}%`,
-                },
-              ]}
+              style={[styles.eventMarker, { left: `${positionPercent}%` }]}
             >
               <View
                 style={[
@@ -86,7 +86,7 @@ export function EventTimeline({
                   },
                 ]}
               >
-                <MaterialIcons name={iconName} size={12} color="white" />
+                <MaterialIcons name={iconName as any} size={12} color="white" />
               </View>
 
               <View
@@ -102,7 +102,7 @@ export function EventTimeline({
                   style={[styles.eventType, { color: eventColor }]}
                   numberOfLines={1}
                 >
-                  {event.type.replace("_", " ")}
+                  {event.type.replace(/_/g, " ")}
                 </Text>
                 <Text
                   style={[styles.eventForce, { color: colors.text.secondary }]}

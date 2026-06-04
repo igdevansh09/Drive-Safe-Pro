@@ -309,26 +309,37 @@ export default function ComparisonScreen() {
                       {} as Record<string, number>,
                     ),
                   );
-                  return eventTypesA.map(([type, count]) => (
-                    <View key={type} style={styles.eventRow}>
-                      <Text
-                        style={[
-                          styles.eventName,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {type.replace("_", " ")}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.eventCount,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        {count}
-                      </Text>
-                    </View>
-                  ));
+                  return eventTypesA.length > 0 ? (
+                    eventTypesA.map(([type, count]) => (
+                      <View key={type} style={styles.eventRow}>
+                        <Text
+                          style={[
+                            styles.eventName,
+                            { color: colors.text.primary },
+                          ]}
+                        >
+                          {type.replace(/_/g, " ")}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.eventCount,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          {count}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={[
+                        styles.eventName,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      No events
+                    </Text>
+                  );
                 })()}
               </View>
 
@@ -348,26 +359,37 @@ export default function ComparisonScreen() {
                       {} as Record<string, number>,
                     ),
                   );
-                  return eventTypesB.map(([type, count]) => (
-                    <View key={type} style={styles.eventRow}>
-                      <Text
-                        style={[
-                          styles.eventName,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {type.replace("_", " ")}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.eventCount,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        {count}
-                      </Text>
-                    </View>
-                  ));
+                  return eventTypesB.length > 0 ? (
+                    eventTypesB.map(([type, count]) => (
+                      <View key={type} style={styles.eventRow}>
+                        <Text
+                          style={[
+                            styles.eventName,
+                            { color: colors.text.primary },
+                          ]}
+                        >
+                          {type.replace(/_/g, " ")}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.eventCount,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          {count}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={[
+                        styles.eventName,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      No events
+                    </Text>
+                  );
                 })()}
               </View>
             </View>
@@ -397,6 +419,8 @@ function ComparisonMetric({
   lowerIsBetter,
   isText,
 }: ComparisonMetricProps) {
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   let winner: "a" | "b" | null = null;
 
   if (!isText && typeof valueA === "number" && typeof valueB === "number") {
@@ -406,40 +430,39 @@ function ComparisonMetric({
     if (valueB < valueA && lowerIsBetter) winner = "b";
   }
 
+  const neutralBg =
+    (colors.background as any).tertiary ?? colors.background.primary;
+
   return (
-    <View style={createStyles(colors).metricCard}>
-      <Text style={[createStyles(colors).metricLabel, { color: colors.text.secondary }]}>
+    <View style={styles.metricCard}>
+      <Text style={[styles.metricLabel, { color: colors.text.secondary }]}>
         {label}
       </Text>
-      <View style={createStyles(colors).metricValues}>
+      <View style={styles.metricValues}>
         <View
           style={[
-            createStyles(colors).metricValue,
+            styles.metricValue,
             {
               backgroundColor:
-                winner === "a"
-                  ? `${colors.status.excellent}20`
-                  : colors.background.tertiary,
+                winner === "a" ? `${colors.status.excellent}20` : neutralBg,
             },
           ]}
         >
-          <Text style={[createStyles(colors).metricNumber, { color: colors.text.primary }]}>
+          <Text style={[styles.metricNumber, { color: colors.text.primary }]}>
             {valueA}
             <Text style={{ color: colors.text.secondary }}>{suffix}</Text>
           </Text>
         </View>
         <View
           style={[
-            createStyles(colors).metricValue,
+            styles.metricValue,
             {
               backgroundColor:
-                winner === "b"
-                  ? `${colors.status.excellent}20`
-                  : colors.background.tertiary,
+                winner === "b" ? `${colors.status.excellent}20` : neutralBg,
             },
           ]}
         >
-          <Text style={[createStyles(colors).metricNumber, { color: colors.text.primary }]}>
+          <Text style={[styles.metricNumber, { color: colors.text.primary }]}>
             {valueB}
             <Text style={{ color: colors.text.secondary }}>{suffix}</Text>
           </Text>

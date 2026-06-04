@@ -13,13 +13,13 @@ interface DriveState {
   resetSession: () => void;
 }
 
-const PENALTIES: Record<TelemetryEvent["type"], number> = {
+export const PENALTIES: Record<TelemetryEvent["type"], number> = {
   HARSH_BRAKING: 5,
   HARSH_ACCELERATION: 5,
-  SHARP_TURN: 4,
-  AGGRESSIVE_STEERING: 5,
-  EXCESSIVE_MOVEMENT: 4,
-  PHONE_HANDLING: 3,
+  SHARP_TURN: 3, 
+  AGGRESSIVE_STEERING: 4,
+  EXCESSIVE_MOVEMENT: 3,
+  PHONE_HANDLING: 10, 
 };
 
 export const useDriveStore = create<DriveState>((set) => ({
@@ -43,7 +43,7 @@ export const useDriveStore = create<DriveState>((set) => ({
 
   registerEvent: (event: TelemetryEvent) =>
     set((state) => {
-      const penalty = PENALTIES[event.type] || 0;
+      const penalty = PENALTIES[event.type] ?? 0;
       const newScore = Math.max(0, state.score - penalty);
 
       return {

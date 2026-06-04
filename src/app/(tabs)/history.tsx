@@ -26,7 +26,6 @@ export default function HistoryScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
   const { sessions } = useHistoryStore();
 
   const renderHeader = () => (
@@ -36,7 +35,6 @@ export default function HistoryScreen() {
         <Text style={styles.subTitle}>Analyze your driving performance.</Text>
       </View>
 
-      {/* LOCAL STANDING CARD */}
       <View style={styles.card}>
         <View style={styles.trophyBg}>
           <MaterialIcons
@@ -65,7 +63,6 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      {/* IMPROVEMENT AREAS */}
       <View style={styles.card}>
         <View style={styles.cardHeaderRowSpace}>
           <Text style={styles.cardHeaderText}>Improvement Areas</Text>
@@ -77,7 +74,6 @@ export default function HistoryScreen() {
         </View>
 
         <View style={styles.improvementList}>
-          {/* Item 1: High Priority (Red) */}
           <View style={styles.improvementItem}>
             <View
               style={[
@@ -112,7 +108,6 @@ export default function HistoryScreen() {
             </Text>
           </View>
 
-          {/* Item 2: Medium Priority (Amber) */}
           <View style={styles.improvementItem}>
             <View
               style={[
@@ -149,7 +144,6 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      {/* TRENDS CHART */}
       <View style={[styles.card, styles.chartCard]}>
         <View style={styles.cardHeaderRowSpace}>
           <Text style={styles.cardHeaderText}>Monthly Trend</Text>
@@ -227,7 +221,6 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      {/* COMPARISON BUTTON */}
       <TouchableOpacity
         style={[
           styles.comparisonBtn,
@@ -252,7 +245,6 @@ export default function HistoryScreen() {
         />
       </TouchableOpacity>
 
-      {/* RECENT DRIVES HEADER */}
       <View style={styles.recentDrivesHeader}>
         <Text style={styles.cardHeaderText}>Recent Drives</Text>
         <TouchableOpacity style={styles.filterBtn}>
@@ -295,7 +287,6 @@ export default function HistoryScreen() {
             </View>
           </View>
 
-          {/* Dynamic Score Ring */}
           <View
             style={[
               styles.scoreRing,
@@ -334,25 +325,6 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* TOP APP BAR */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarLeft}>
-          <View style={styles.avatar}>
-            <MaterialIcons
-              name="person"
-              size={16}
-              color={colors.brand.primary}
-            />
-          </View>
-          <Text style={styles.appBarTitle}>DriveSafe Pro</Text>
-        </View>
-        <MaterialIcons
-          name="verified-user"
-          size={24}
-          color={colors.brand.primary}
-        />
-      </View>
-
       <FlatList
         data={sessions}
         keyExtractor={(item) => item.id}

@@ -1,6 +1,12 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Animated,
@@ -34,23 +40,26 @@ export default function DriveScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scoreAnim = useRef(new Animated.Value(100)).current;
 
-  useEffect(() => {
-    const handleEventDetected = (event: TelemetryEvent) => {
-      // Update peak g-force
+  const handleEventDetected = useCallback(
+    (event: TelemetryEvent) => {
       setPeakGForce((prev) => Math.max(prev, event.gForce));
-
-      // Animate score decrease
-      Animated.timing(scoreAnim, {
-        toValue: score,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-
       registerEvent(event);
-    };
+    },
+    [registerEvent],
+  );
 
+  useEffect(() => {
+    Animated.timing(scoreAnim, {
+      toValue: score,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [score]);
+
+  useEffect(() => {
     engineRef.current = new SensorManager(handleEventDetected);
     startDriveSession();
+
     engineRef.current.startDrive();
 
     Animated.loop(
@@ -78,7 +87,11 @@ export default function DriveScreen() {
       if (engineRef.current) engineRef.current.endDrive();
       clearInterval(speedInterval);
     };
-  }, [score, registerEvent, startDriveSession]);
+  }, []); 
+
+  useEffect(() => {
+    engineRef.current?.updateCallback(handleEventDetected);
+  }, [handleEventDetected]);
 
   const handleEndDrive = () => {
     Alert.alert("End Drive", "Are you sure you want to finish this trip?", [
@@ -104,7 +117,6 @@ export default function DriveScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* TOP APP BAR */}
       <View style={styles.appBar}>
         <View style={styles.appBarLeft}>
           <View style={styles.avatar}>
@@ -127,7 +139,6 @@ export default function DriveScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* STATUS INDICATOR */}
         <View style={styles.statusWrapper}>
           <View style={styles.statusPill}>
             <Animated.View
@@ -141,7 +152,6 @@ export default function DriveScreen() {
         </View>
 
         <View style={styles.grid}>
-          {/* SAFETY SCORE GAUGE */}
           <View style={styles.card}>
             <Text style={styles.cardLabel}>SAFETY SCORE</Text>
             <View style={styles.gaugeContainer}>
@@ -172,14 +182,23 @@ export default function DriveScreen() {
               </View>
             </View>
             <View style={styles.trendRow}>
-              <MaterialIcons name="trending-up" size={16} color={ratingColor} />
+              <MaterialIcons
+                name={
+                  score >= 80
+                    ? "trending-up"
+                    : score >= 60
+                      ? "trending-flat"
+                      : "trending-down"
+                }
+                size={16}
+                color={ratingColor}
+              />
               <Text style={[styles.trendText, { color: ratingColor }]}>
-                Optimal
+                {safetyRating.grade}
               </Text>
             </View>
           </View>
 
-          {/* REAL-TIME METRICS */}
           <View style={styles.card}>
             <Text style={styles.cardLabel}>LIVE METRICS</Text>
             <View style={styles.metricsGrid}>
@@ -210,7 +229,6 @@ export default function DriveScreen() {
             </View>
           </View>
 
-          {/* SPEEDOMETER */}
           <View style={styles.card}>
             <Text style={styles.cardLabel}>CURRENT SPEED</Text>
             <View style={styles.speedContainer}>
@@ -235,7 +253,6 @@ export default function DriveScreen() {
             </View>
           </View>
 
-          {/* LIVE TELEMETRY CHARTS */}
           <View style={styles.card}>
             <View style={styles.telemetryHeader}>
               <Text style={styles.cardLabel}>LIVE TELEMETRY</Text>
@@ -301,7 +318,6 @@ export default function DriveScreen() {
             </View>
           </View>
 
-          {/* EVENT LOG */}
           <View style={[styles.card, styles.eventLogCard]}>
             <View style={styles.telemetryHeader}>
               <Text style={styles.cardLabel}>EVENT LOG</Text>
@@ -340,7 +356,7 @@ export default function DriveScreen() {
                       ]}
                     />
                     <Text style={styles.eventTypeText}>
-                      {ev.type.replace("_", " ")}
+                      {ev.type.replace(/_/g, " ")}
                     </Text>
                     <Text style={styles.eventGForce}>
                       {ev.gForce.toFixed(2)}g
@@ -353,7 +369,6 @@ export default function DriveScreen() {
         </View>
       </ScrollView>
 
-      {/* FLOATING END DRIVE BUTTON */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.endButton, { backgroundColor: colors.status.poor }]}
